@@ -11,7 +11,7 @@ from string import punctuation, digits
 
 STOPWORDS = nltk.corpus.stopwords.words('russian')
 NUM_TOPICS = 10
-WITH_PRINT = True
+WITH_PRINT = False
 
 punctuation = set(punctuation + '«»—–…“”\n\t' + digits)
 TABLE = str.maketrans({ch: ' ' for ch in punctuation})
@@ -22,7 +22,9 @@ pymystem = Mystem()
 
 def main():
     fls = readFiles()
-    print('Find {} text groups'.format(len(fls)))  
+    fls_len = len(fls)
+    print('Find {} text groups'.format(fls_len))  
+    cur_len = 0
     for f in fls:
         txt = f['texts']
         joined_text = ' '.join(txt)
@@ -33,6 +35,8 @@ def main():
         f['lda_str_tuples'] = lda_str_tuples
         f['nmf_str_tuples'] = nmf_str_tuples
         f['lsi_str_tuples'] = lsi_str_tuples
+        cur_len += 1
+        print('Proccess by {} from {} ...'.format(cur_len, fls_len))
     createReport(fls)
 
 def readFiles():
@@ -78,7 +82,6 @@ def topic_process(texts_vec, target_stop_words):
     lsi_Z = lsi_model.fit_transform(data_vectorized)
     # print(lsi_Z.shape)  # (NO_DOCUMENTS, NO_TOPICS)
     
-    
     # Let's see how the first document in the corpus looks like in different topic spaces
     lda_str_tuples = transform_topics_to_str(lda_model, vectorizer)
     print_topics("LDA Model:", lda_str_tuples)
@@ -95,7 +98,7 @@ def topic_process(texts_vec, target_stop_words):
     return lda_str_tuples, nmf_str_tuples, lsi_str_tuples
 
 def print_topics(title, topic_rows):
-    if WITH_PRINT:
+    if WITH_PRINT == True:
         print(title)
         for t in topic_rows:
             print(t)    
@@ -127,8 +130,9 @@ def createReport(rows):
             f.write('[' + ', '.join(list(map(lambda x: x[0], m[1]))) + ']')
             f.write('\n')
         f.write('\n')
-        f.write('STOPWORDS:\n')
-        f.write(', '.join(r['stopwords']))
+        if WITH_PRINT == True:
+            f.write('STOPWORDS:\n')
+            f.write(', '.join(r['stopwords']))
         f.write('=' * 20)
         f.write('\n')
     f.close()
@@ -153,10 +157,9 @@ def get_all_stopwords(lemms):
     for lt in lemms:
         wtp = lt[1].lower().strip()
         if (wtp == 'noun' or wtp == '_x') is False:
-            print("Add in stops " + lt[0] + ' with ' + lt[1] + " wtp " + wtp)
+            if WITH_PRINT == True:
+                print("Add in stops " + lt[0] + ' with ' + lt[1] + " wtp " + wtp)
             all_stop_words.append(lt[0])
-        else:
-            print("No stops " + lt[0] + ' with ' + lt[1] + " wtp " + wtp)
     return all_stop_words
 
 main()
