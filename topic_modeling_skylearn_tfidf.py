@@ -9,9 +9,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from pymystem3 import Mystem
 from string import punctuation, digits
 
-STOPWORDS = nltk.corpus.stopwords.words('russian')
+STOPWORDS = []
 NUM_TOPICS = 10
+
 WITH_PRINT = False
+ONLY_NOUNS = True
 
 punctuation = set(punctuation + '«»—–…“”\n\t' + digits)
 TABLE = str.maketrans({ch: ' ' for ch in punctuation})
@@ -20,16 +22,22 @@ mapping = {'COM': 'ADJ', 'APRO': 'DET', 'PART': 'PART', 'PR': 'ADP', 'ADV': 'ADV
            'NONLEX': 'X', 'SPRO': 'PRON', 'ADVPRO': 'ADV', 'A': 'ADJ'}
 pymystem = Mystem()
 
+def reset_stopwords():
+    STOPWORDS = nltk.corpus.stopwords.words('russian')
+
 def main():
     fls = readFiles()
     fls_len = len(fls)
     print('Find {} text groups'.format(fls_len))  
     cur_len = 0
     for f in fls:
+        reset_stopwords()
         txt = f['texts']
-        joined_text = ' '.join(txt)
-        lemms_type = lemmatize_words(pymystem, joined_text, mapping)
-        target_stopwords = get_all_stopwords(lemms_type)
+        target_stopwords = STOPWORDS
+        if ONLY_NOUNS == True:
+            joined_text = ' '.join(txt)
+            lemms_type = lemmatize_words(pymystem, joined_text, mapping)
+            target_stopwords = get_all_stopwords(lemms_type)
         f['stopwords'] = target_stopwords
         lda_str_tuples, nmf_str_tuples, lsi_str_tuples = topic_process(txt, target_stopwords)
         f['lda_str_tuples'] = lda_str_tuples
