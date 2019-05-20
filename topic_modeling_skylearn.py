@@ -5,7 +5,7 @@ import os
 import numpy as np
 import datetime as time
 from sklearn.decomposition import NMF, LatentDirichletAllocation, TruncatedSVD
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 STOPWORDS = nltk.corpus.stopwords.words('russian')
 NUM_TOPICS = 10
@@ -47,9 +47,7 @@ def transform_topics_to_str(model, vectorizer, top_n=10):
     return topics
 
 def topic_process(text):
-    vectorizer = CountVectorizer(min_df=1, max_df=0.9, 
-                                stop_words=STOPWORDS, lowercase=True, 
-                                token_pattern='[а-яА-Я\-][а-яА-Я\-]{2,}')
+    vectorizer = TfidfVectorizer(min_df=1, max_df=0.9, stop_words=STOPWORDS, lowercase=True)
     data_vectorized = vectorizer.fit_transform(text)
     
     # Build a Latent Dirichlet Allocation Model
