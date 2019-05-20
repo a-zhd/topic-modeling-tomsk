@@ -6,20 +6,33 @@ import numpy as np
 import datetime as time
 from sklearn.decomposition import NMF, LatentDirichletAllocation, TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
+from pymystem3 import Mystem
+from string import punctuation, digits
 
 STOPWORDS = nltk.corpus.stopwords.words('russian')
 NUM_TOPICS = 10
 WITH_PRINT = True
 
+punctuation = set(punctuation + '«»—–…“”\n\t' + digits)
+TABLE = str.maketrans({ch: ' ' for ch in punctuation})
+mapping = {'COM': 'ADJ', 'APRO': 'DET', 'PART': 'PART', 'PR': 'ADP', 'ADV': 'ADV', 'INTJ': 'INTJ',
+           'S': 'NOUN', 'V': 'VERB', 'CONJ': 'SCONJ', 'UNKN': 'X', 'ANUM': 'ADJ', 'NUM': 'NUM',
+           'NONLEX': 'X', 'SPRO': 'PRON', 'ADVPRO': 'ADV', 'A': 'ADJ'}
+pymystem = Mystem()
+
 def main():
     fls = readFiles()
-    print('Find %s text groups', len(fls))  
+    print('Find {} text groups'.format(len(fls)))  
     for f in fls:
-        lda_str_tuples, nmf_str_tuples, lsi_str_tuples = topic_process(f['texts'])
+        txt = f['texts']
+        joined_text = ' '.join(txt)
+        lemms_type = lemmatize_words(pymystem, joined_text, mapping)
+        target_stopwords = get_all_stopwords(lemms_type)
+        f['stopwords'] = target_stopwords
+        lda_str_tuples, nmf_str_tuples, lsi_str_tuples = topic_process(txt, target_stopwords)
         f['lda_str_tuples'] = lda_str_tuples
         f['nmf_str_tuples'] = nmf_str_tuples
         f['lsi_str_tuples'] = lsi_str_tuples
-        print("Create topic for group: %s, files: %s", f['group'], f['files'])
     createReport(fls)
 
 def readFiles():
@@ -46,9 +59,9 @@ def transform_topics_to_str(model, vectorizer, top_n=10):
         topics.append([topic_num_str, topic_str])
     return topics
 
-def topic_process(text):
-    vectorizer = TfidfVectorizer(min_df=1, max_df=0.9, stop_words=STOPWORDS, lowercase=True)
-    data_vectorized = vectorizer.fit_transform(text)
+def topic_process(texts_vec, target_stop_words):
+    vectorizer = TfidfVectorizer(min_df=1, max_df=0.9, stop_words=target_stop_words, lowercase=True)
+    data_vectorized = vectorizer.fit_transform(texts_vec)
     
     # Build a Latent Dirichlet Allocation Model
     lda_model = LatentDirichletAllocation(n_components=NUM_TOPICS, max_iter=10, learning_method='online')
@@ -114,8 +127,36 @@ def createReport(rows):
             f.write('[' + ', '.join(list(map(lambda x: x[0], m[1]))) + ']')
             f.write('\n')
         f.write('\n')
+        f.write('STOPWORDS:\n')
+        f.write(', '.join(r['stopwords']))
         f.write('=' * 20)
         f.write('\n')
     f.close()
+
+def lemmatize_words(pymystem, text, mapping):
+    lemmas_pos = []
+    ana = pymystem.analyze(text.translate(TABLE))
+    for word in ana:
+        if word.get('analysis') and len(word.get('analysis')) > 0:
+            lemma = word['analysis'][0]['lex'].lower().strip()
+            if lemma not in STOPWORDS:
+                pos = word['analysis'][0]['gr'].split(',')[0]
+                pos = pos.split('=')[0].strip()
+                if pos in mapping:
+                    lemmas_pos.append([lemma, mapping[pos]])
+                else:
+                    lemmas_pos.append([lemma, '_X']) # на случай, если попадется тэг, которого нет в маппинге
+    return lemmas_pos
+
+def get_all_stopwords(lemms):
+    all_stop_words = STOPWORDS.copy()
+    for lt in lemms:
+        wtp = lt[1].lower().strip()
+        if (wtp == 'noun' or wtp == '_x') is False:
+            print("Add in stops " + lt[0] + ' with ' + lt[1] + " wtp " + wtp)
+            all_stop_words.append(lt[0])
+        else:
+            print("No stops " + lt[0] + ' with ' + lt[1] + " wtp " + wtp)
+    return all_stop_words
 
 main()
