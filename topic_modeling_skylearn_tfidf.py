@@ -22,30 +22,32 @@ mapping = {'COM': 'ADJ', 'APRO': 'DET', 'PART': 'PART', 'PR': 'ADP', 'ADV': 'ADV
            'NONLEX': 'X', 'SPRO': 'PRON', 'ADVPRO': 'ADV', 'A': 'ADJ'}
 pymystem = Mystem()
 
-def reset_stopwords():
-    STOPWORDS = nltk.corpus.stopwords.words('russian')
-
 def main():
-    fls = readFiles()
-    fls_len = len(fls)
+    gr_fls = readFiles()
+    fls_len = len(gr_fls)
     print('Find {} text groups'.format(fls_len))  
     cur_len = 0
-    for f in fls:
+    for f in gr_fls:
         reset_stopwords()
-        txt = f['texts']
+        txt_list = f['texts']
         target_stopwords = STOPWORDS
         if ONLY_NOUNS == True:
-            joined_text = ' '.join(txt)
-            lemms_type = lemmatize_words(pymystem, joined_text, mapping)
-            target_stopwords = get_all_stopwords(lemms_type)
+            joined_text = ' '.join(txt_list)
+            lws = lemmatize_words(pymystem, joined_text, mapping)
+            target_stopwords = extract_nouns(lws)
         f['stopwords'] = target_stopwords
-        lda_str_tuples, nmf_str_tuples, lsi_str_tuples = topic_process(txt, target_stopwords)
+        #lemmatize process
+        lemmatized_texts = lemmatized_process(txt_list)
+        #tokenize process
+        lda_str_tuples, nmf_str_tuples, lsi_str_tuples = topic_process(lemmatized_texts, target_stopwords)
         f['lda_str_tuples'] = lda_str_tuples
         f['nmf_str_tuples'] = nmf_str_tuples
         f['lsi_str_tuples'] = lsi_str_tuples
         cur_len += 1
         print('Proccess by {} from {} ...'.format(cur_len, fls_len))
-    createReport(fls)
+    print("Create report...")
+    createReport(gr_fls)
+    print("Finish")
 
 def readFiles():
     groupFolders = list(filter(lambda g: g.is_dir(), os.scandir('texts')))
@@ -62,6 +64,41 @@ def readFiles():
                 files.append(f.name)
         rows.append({'group': groupName, 'texts': texts, 'files': files}) 
     return rows
+
+def reset_stopwords():
+    STOPWORDS = nltk.corpus.stopwords.words('russian')
+
+def lemmatize_one(txt):
+    lemmas = pymystem.lemmatize(txt)
+    return ''.join(lemmas)
+
+def lemmatized_process(txt_list):
+    return list(map(lambda t: lemmatize_one(t), txt_list))
+
+def lemmatize_words(pymystem, text, mapping):
+    lemmas_pos = []
+    ana = pymystem.analyze(text.translate(TABLE))
+    for word in ana:
+        if word.get('analysis') and len(word.get('analysis')) > 0:
+            lemma = word['analysis'][0]['lex'].lower().strip()
+            if lemma not in STOPWORDS:
+                pos = word['analysis'][0]['gr'].split(',')[0]
+                pos = pos.split('=')[0].strip()
+                if pos in mapping:
+                    lemmas_pos.append([lemma, mapping[pos]])
+                else:
+                    lemmas_pos.append([lemma, '_X']) # на случай, если попадется тэг, которого нет в маппинге
+    return lemmas_pos
+
+def extract_nouns(lemmatized_words):
+    all_stop_words = STOPWORDS.copy()
+    for lt in lemmatized_words:
+        wtp = lt[1].lower().strip()
+        if (wtp == 'noun' or wtp == '_x') is False:
+            if WITH_PRINT == True:
+                print("Add in stops " + lt[0] + ' with ' + lt[1] + " wtp " + wtp)
+            all_stop_words.append(lt[0])
+    return all_stop_words
 
 def transform_topics_to_str(model, vectorizer, top_n=10):
     topics = []
@@ -144,30 +181,5 @@ def createReport(rows):
         f.write('=' * 20)
         f.write('\n')
     f.close()
-
-def lemmatize_words(pymystem, text, mapping):
-    lemmas_pos = []
-    ana = pymystem.analyze(text.translate(TABLE))
-    for word in ana:
-        if word.get('analysis') and len(word.get('analysis')) > 0:
-            lemma = word['analysis'][0]['lex'].lower().strip()
-            if lemma not in STOPWORDS:
-                pos = word['analysis'][0]['gr'].split(',')[0]
-                pos = pos.split('=')[0].strip()
-                if pos in mapping:
-                    lemmas_pos.append([lemma, mapping[pos]])
-                else:
-                    lemmas_pos.append([lemma, '_X']) # на случай, если попадется тэг, которого нет в маппинге
-    return lemmas_pos
-
-def get_all_stopwords(lemms):
-    all_stop_words = STOPWORDS.copy()
-    for lt in lemms:
-        wtp = lt[1].lower().strip()
-        if (wtp == 'noun' or wtp == '_x') is False:
-            if WITH_PRINT == True:
-                print("Add in stops " + lt[0] + ' with ' + lt[1] + " wtp " + wtp)
-            all_stop_words.append(lt[0])
-    return all_stop_words
 
 main()
